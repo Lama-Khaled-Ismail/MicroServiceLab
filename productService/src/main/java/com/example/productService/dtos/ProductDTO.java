@@ -1,20 +1,20 @@
 package com.example.productService.dtos;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Setter
 @Getter
-public class ProductDTO {
+@AllArgsConstructor
+@NoArgsConstructor
+public class ProductDto {
 
-    private int productId;
+    private Integer productId;
     private String name;
-    private String description;
-    private double price;
-    private int categoryId;
-    private String image;
-    private int stock;
-    private String status;
+    private Double price;
+    private Integer stock;
 
-    public ProductDTO() {}
+
 }

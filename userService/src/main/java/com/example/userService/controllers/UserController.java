@@ -2,11 +2,12 @@ package com.example.userService.controllers;
 
 
 import com.example.userService.dtos.CreateUserDto;
-import com.example.userService.dtos.LoginRequestDto;
+
 import com.example.userService.dtos.UserDto;
 import com.example.userService.entities.User;
 import com.example.userService.mappers.UserMapper;
 import com.example.userService.service.UserService;
+import com.example.userService.service.UserServiceImpl;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -21,75 +22,35 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/users")
 public class UserController {
 
     private final UserService userService;
-    private final UserMapper userMapper;
+
 
     @Autowired
-    public UserController(UserService userService , UserMapper userMapper) {
+    public UserController(UserService userService ) {
         this.userService = userService;
-        this.userMapper = userMapper;
+
     }
 
-    @PostMapping("/register")
+    @PostMapping
     public ResponseEntity<UserDto> createUser(@Valid @RequestBody CreateUserDto createUserDto) {
-        User user = userMapper.createDtoToEntity(createUserDto);
-        User savedUser = userService.createUser(user);
-        return new ResponseEntity<>(userMapper.toDTO(savedUser),HttpStatus.CREATED);
+        UserDto savedUser = userService.createUser(createUserDto);
+        return new ResponseEntity<>(savedUser,HttpStatus.CREATED);
     }
     @GetMapping
     public ResponseEntity<List<UserDto>> getAllUsers() {
-        List<User> users = userService.getAllUsers();
-        List<UserDto> userDtos = users.stream()
-                .map(userMapper::toDTO)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(userDtos);
+        List<UserDto> users = userService.getAllUsers();
+        return ResponseEntity.ok(users);
     }
+
     @GetMapping("/{id}")
-    public ResponseEntity<UserDto> getUserById(@PathVariable int id) {
-
-        User user =  userService.getUserById(id);
-        return ResponseEntity.ok(userMapper.toDTO(user));
+    public ResponseEntity<UserDto> getUserById(@PathVariable Integer id) {
+        UserDto user =  userService.getUserById(id);
+        return ResponseEntity.ok(user);
     }
 
-    @PutMapping("/changeBalance")
-    public ResponseEntity<UserDto> updateBalance(
-            @RequestParam @Min(1) int userId,
-            @RequestParam double amount) {
-
-        if (amount == 0) {
-            throw new IllegalArgumentException("Amount cannot be zero");
-        }
-        userService.changeBalance(userId, amount);
-        return ResponseEntity.ok(userMapper.toDTO(userService.getUserById(userId)));
-    }
-
-    /******************* user Login Api ************************/
-
-    @PostMapping("/login")
-    public ResponseEntity<UserDto> login(@RequestBody LoginRequestDto loginRequestDto, HttpSession session) {
-        UserDto userDto = userService.login(loginRequestDto, session);
-        return ResponseEntity.ok(userDto);
-    }
-
-    /******************* user logout Api ************************/
-    @PostMapping("/logout")
-    public ResponseEntity<String> logout(HttpSession session) {
-        userService.logout(session);
-        return ResponseEntity.ok("Logged out successfully.");
-    }
-
-    @GetMapping("/check-session")
-    public ResponseEntity<?> checkSession(HttpSession session) {
-        Object user = session.getAttribute("user");
-        if (user != null) {
-            return ResponseEntity.ok("Session is active. User: " + user.toString());
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No active session.");
-        }
-    }
 
 
 

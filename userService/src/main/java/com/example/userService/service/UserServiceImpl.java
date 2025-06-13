@@ -1,151 +1,65 @@
 package com.example.userService.service;
 
-import com.example.userService.dtos.LoginRequestDto;
+import com.example.userService.dtos.CreateUserDto;
 import com.example.userService.dtos.UserDto;
 import com.example.userService.entities.User;
+import com.example.userService.mappers.UserMapper;
 import com.example.userService.repos.UserRepository;
-import jakarta.servlet.http.HttpSession;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Date;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
-public class UserServiceImpl implements UserService {
+@Transactional
+public class UserServiceImpl implements UserService{
 
-    private final UserRepository userRepository;
-    private final RestTemplate restTemplate;
+    @Autowired
+    private UserRepository userRepository;
 
-    @Value("${order.service.url}")
-    private String orderServiceUrl;
+    @Autowired
+    private UserMapper userMapper;
 
-    @Value("${product.service.url}")
-    private String productServiceUrl;
-
-    public UserServiceImpl(UserRepository userRepository, RestTemplate restTemplate) {
-        this.userRepository = userRepository;
-        this.restTemplate = restTemplate;
-    }
-
-    @Override
-    public User getUserByEmail(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + email));
-    }
-
-    @Override
-    public User getUserById(int userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userId));
-    }
-
-    @Override
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    @Override
-    public User authenticateUser(String email, String password) {
-        User user = getUserByEmail(email);
-        if (!password.equals(user.getPassword())) {
-            throw new IllegalArgumentException("Invalid credentials");
+    public UserDto createUser(CreateUserDto createUserDto) {
+        if (userRepository.existsByname(createUserDto.getUsername())) {
+            throw new RuntimeException("Username already exists");
         }
-        return user;
-    }
-
-    @Override
-    public User createUser(User user) {
-        // Save password as-is (INSECURE: for development only)
-        return userRepository.save(user);
-    }
-
-    @Override
-    public void forgotPassword(String email) {
-        User user = getUserByEmail(email);
-        String resetToken = UUID.randomUUID().toString();
-        user.setResetToken(resetToken);
-        user.setResetTokenExpiry(new Date(System.currentTimeMillis() + 3600_000)); // 1 hour
-        userRepository.save(user);
-
-        System.out.println("Reset token: " + resetToken);
-    }
-
-    @Override
-    public void resetPassword(String resetToken, String newPassword) {
-        Optional<User> userOpt = userRepository.findByResetToken(resetToken);
-        if (userOpt.isEmpty()) throw new IllegalArgumentException("Invalid reset token");
-
-        User user = userOpt.get();
-        if (user.getResetTokenExpiry().before(new Date())) {
-            throw new IllegalStateException("Reset token expired");
+        if (userRepository.existsByEmail(createUserDto.getEmail())) {
+            throw new RuntimeException("Email already exists");
         }
 
-        user.setPassword(newPassword); // Save plain text password (INSECURE)
-        user.setResetToken(null);
-        user.setResetTokenExpiry(null);
-        userRepository.save(user);
+        User user = userMapper.createDtoToEntity(createUserDto);
+        User savedUser = userRepository.save(user);
+        return userMapper.toDTO(savedUser);
     }
 
-    @Override
-    public int changeBalance(int userId, double amount) {
-        User user = getUserById(userId);
-        double newBalance = user.getCreditBalance() + amount;
-        if (newBalance < 0) {
-            throw new IllegalArgumentException("Insufficient balance");
-        }
-        user.setCreditBalance(newBalance);
-        userRepository.save(user);
-        return (int) user.getCreditBalance();
+    public List<UserDto> getAllUsers() {
+        return userRepository.findAll()
+                .stream()
+                .map(userMapper::toDTO)
+                .collect(Collectors.toList());
     }
 
-    @Override
-    public void verifyEmail(String verificationToken) {
-        Optional<User> userOpt = userRepository.findByResetToken(verificationToken);
-        if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("Invalid token");
-        }
-
-        User user = userOpt.get();
-        user.setResetToken(null);
-        user.setResetTokenExpiry(null);
-        userRepository.save(user);
+    public UserDto getUserById(Integer id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return userMapper.toDTO(user);
     }
 
-    @Override
-    public boolean emailExists(String email) {
-        return userRepository.existsByEmail(email);
-    }
+    public UserDto updateBalance(Integer userId, Double amount) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-    @Override
-    public UserDto login(LoginRequestDto loginRequestDto, HttpSession session) {
-        User user = authenticateUser(loginRequestDto.getEmail(), loginRequestDto.getPassword());
-        session.setAttribute("userId", user.getUserId());
-
-        try {
-            String url = orderServiceUrl + "/orders/count/" + user.getUserId();
-            Integer orderCount = restTemplate.getForObject(url, Integer.class);
-            System.out.println("User has " + orderCount + " orders.");
-        } catch (Exception e) {
-            System.err.println("Order service unavailable: " + e.getMessage());
+        if (user.getBalance() + amount < 0) {
+            throw new RuntimeException("Insufficient balance");
         }
 
-        return new UserDto(
-                user.getUserId(),
-                user.getEmail(),
-                user.getName(),
-                user.getAddress(),
-                user.getPhone(),
-                user.getCreditBalance()
-
-        );
+        user.setBalance(user.getBalance() + amount);
+        User savedUser = userRepository.save(user);
+        return userMapper.toDTO(savedUser);
     }
 
-    @Override
-    public void logout(HttpSession session) {
-        session.invalidate();
-    }
+
 }

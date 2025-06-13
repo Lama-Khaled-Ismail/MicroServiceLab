@@ -1,12 +1,23 @@
 package com.example.productService.mappers;
 
-import com.example.productService.dtos.ProductDTO;
+import com.example.productService.dtos.CreateProductDto;
+import com.example.productService.dtos.ProductDto;
+import com.example.productService.entities.Product;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.ReportingPolicy;
 
-@Mapper
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ProductMapper {
 
-    ProductDTO entityToDTO(Product entity);
+    ProductDto toDTO(Product product);
 
-    Product dtoToEntity(ProductDTO dto);
+    Product toEntity(ProductDto productDto);
+
+    @Mapping(target = "productId", ignore = true)
+    Product createDtoToEntity(CreateProductDto createProductDto);
+
+    CreateProductDto toCreateDto(Product product);
+
 }

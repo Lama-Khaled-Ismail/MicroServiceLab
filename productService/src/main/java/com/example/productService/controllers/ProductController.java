@@ -1,16 +1,22 @@
 package com.example.productService.controllers;
 
 
+import com.example.productService.dtos.CreateProductDto;
+import com.example.productService.dtos.ProductDto;
 import com.example.productService.entities.Product;
+import com.example.productService.service.ProductService;
+import com.example.productService.service.ProductServiceImpl;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/products")
 public class ProductController {
 
     private final ProductService productService;
@@ -20,50 +26,47 @@ public class ProductController {
         this.productService = productService;
     }
 
+    @PostMapping
+    public ResponseEntity<ProductDto> createProduct(@Valid @RequestBody CreateProductDto createProductDto) {
+        ProductDto product = productService.createProduct(createProductDto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(product);
+    }
+
     @GetMapping
-    public List<Product> getAllProducts() {
-        return productService.getAllProducts();
+    public ResponseEntity<List<ProductDto>> getAllProducts() {
+        List<ProductDto> products;
+
+        products = productService.getAllProducts();
+
+        return ResponseEntity.ok(products);
     }
 
     @GetMapping("/{id}")
-    public Product getProductById(@PathVariable int id) {
-        return productService.getProductById(id);
-    }
-
-    @PostMapping
-    public Product createProduct(@RequestBody Product product) {
-        return productService.createProduct(product);
+    public ResponseEntity<ProductDto> getProductById(@PathVariable Integer id) {
+        ProductDto product = productService.getProductById(id);
+        return ResponseEntity.ok(product);
     }
 
     @PutMapping("/{id}")
-    public Product updateProduct(@PathVariable int id, @RequestBody Product product) {
-        product.setProductId(id);
-        return productService.updateProduct(product);
+    public ResponseEntity<ProductDto> updateProduct(
+            @PathVariable Integer  id,
+            @Valid @RequestBody CreateProductDto updateProductDto) {
+        ProductDto product = productService.updateProduct(id, updateProductDto);
+        return ResponseEntity.ok(product);
     }
 
     @DeleteMapping("/{id}")
-    public boolean deleteProduct(@PathVariable int id) {
-        return productService.deleteProductById(id);
+    public ResponseEntity<Void> deleteProduct(@PathVariable Integer id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/category/{categoryId}")
-    public List<Product> getProductsByCategoryId(@PathVariable int categoryId) {
-        return productService.getProductsByCategoryId(categoryId);
-    }
-
-    //http://localhost:8080/api/v1/products/filter?minPrice=0&maxPrice=200&sortDir=desc&page=1&size=3
-    @GetMapping("/filter")
-    public ResponseEntity<Page<Product>> filterProducts(
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) Double minPrice,
-            @RequestParam(required = false) Double maxPrice,
-            @RequestParam(defaultValue = "asc") String sortDir,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "5") int size
-    ) {
-        Page<Product> result = productService.filterProducts(name, category, minPrice, maxPrice, sortDir, page, size);
-        return ResponseEntity.ok(result);
+    @PutMapping("/{id}/stock")
+    public ResponseEntity<ProductDto> updateStock(
+            @PathVariable Integer id,
+            @RequestParam Integer quantity) {
+        ProductDto product = productService.updateStock(id, quantity);
+        return ResponseEntity.ok(product);
     }
 
 }

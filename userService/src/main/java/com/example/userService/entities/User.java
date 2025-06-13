@@ -15,46 +15,30 @@ import java.util.Date;
 @ToString
 @EqualsAndHashCode
 @Entity
-@Table(name = "users", indexes = {
-        @Index(columnList = "email"),
-        @Index(columnList = "phone")
-})
+@Table(name ="users")
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "user_id")
-    private int userId;
+    @Column(name = "id")
+    private Integer userId;
 
     @NonNull
     @Email(regexp = ".+@.+\\..+")
     @Column(nullable = false, unique = true)
     private String email;
 
-    @NonNull
-    @Column(nullable = false)
-    private String password;
+
 
     @NonNull
     @Column(nullable = false)
     private String name;
 
-    @NonNull
-    @Column(nullable = false)
-    private String address;
+
 
     @NonNull
     @PositiveOrZero
-    @Column(name = "credit_balance", nullable = false)
-    private double creditBalance;
+    @Column(nullable = false)
+    private double balance;
 
-    @NonNull
-    @Pattern(regexp = "^\\+?[0-9]{8,15}$")
-    @Column(nullable = false, unique = true)
-    private String phone;
-
-
-    private String resetToken;
-
-    private Date resetTokenExpiry;
 }

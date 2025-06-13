@@ -1,103 +1,98 @@
 package com.example.orderService.service;
 
-import com.example.orderService.Exceptions.OrderNotFoundException;
-import com.example.orderService.dtos.OrderDto;
-import com.example.orderService.dtos.OrderItemDto;
+import com.example.orderService.dtos.*;
 import com.example.orderService.entities.Order;
-import com.example.orderService.entities.OrderStatus;
+import com.example.orderService.entities.OrderItem;
 import com.example.orderService.mappers.OrderMapper;
-import com.example.orderService.repo.OrderRepo;
-import jakarta.servlet.http.HttpSession;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+
+import com.example.orderService.repo.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 @Service
+@Transactional
 public class OrderServiceImpl implements OrderService {
 
-    private final OrderRepo orderRepository;
+    @Autowired
+    private OrderRepository orderRepository;
 
-    private final OrderMapper orderMapper;
+    @Autowired
+    private OrderMapper orderMapper;
 
-    private final RestTemplate restTemplate;
+    @Autowired
+    private UserServiceClient userServiceClient;
 
-    @Value("${user.service.url}")
-    private String userServiceUrl;
+    @Autowired
+    private ProductServiceClient productServiceClient;
 
-    @Value("${product.service.url}")
-    private String productServiceUrl;
+    public OrderDto createOrder(CreateOrderDto createOrderDto) {
+        // Validate user exists
+        UserDto user = userServiceClient.getUserById(createOrderDto.getUserId());
 
+        // Calculate total and validate products
+        double totalAmount = 0.0;
+        for (OrderItemDto itemDto : createOrderDto.getOrderItems()) {
+            ProductDto product = productServiceClient.getProductById(itemDto.getProductId());
 
-
-    public OrderServiceImpl(OrderRepo orderRepository,
-                            OrderMapper orderMapper, RestTemplate restTemplate) {
-        this.orderRepository = orderRepository;
-        this.orderMapper = orderMapper;
-        this.restTemplate = restTemplate;
-
-    }
-
-
-    @Transactional
-    public Order checkout(  OrderDto orderDto) {
-        // remote call to check user exits
-        String userUrl = userServiceUrl + "/" + orderDto.getUserId();
-        Boolean userExists = restTemplate.getForObject(userUrl, Boolean.class);
-        if (userExists == null || !userExists) {
-            throw new IllegalArgumentException("User does not exist with ID: " + orderDto.getUserId());
-        }
-        // remote call to check product exitsOrderController
-        for (OrderItemDto item : orderDto.getItems()) {
-            String productUrl = productServiceUrl + "/" + item.getProductId();
-            Boolean productExists = restTemplate.getForObject(productUrl, Boolean.class);
-            if (productExists == null || !productExists) {
-                throw new IllegalArgumentException("Product does not exist: " + item.getProductName());
+            if (product.getStock() < itemDto.getQuantity()) {
+                throw new RuntimeException("Insufficient stock for product: " + product.getName());
             }
-        }
-        Order order = orderMapper.toEntity(orderDto);
-        return orderRepository.save(order);
-    }
 
-    public Page<OrderDto> getAllOrders(Pageable pageable) {
-        Page<Order> orderPage = orderRepository.findAllOrders(pageable);
-
-        return orderPage.map(orderMapper::toDto);
-    }
-
-
-    public Page<OrderDto> getOrdersByUserId(int userId, Pageable pageable) {
-        return orderRepository.findByUserId(userId, pageable)
-                .map(orderMapper::toDto);
-    }
-
-    public Optional<OrderDto> getOrderById(int orderId) {
-        return orderRepository.findByOrderId(orderId)
-                .map(orderMapper::toDto);
-    }
-
-    public Optional<OrderDto> getOrderForUser(int userId, int orderId) {
-        return orderRepository.findByOrderIdAndUserId(orderId, userId)
-                .map(orderMapper::toDto);
-    }
-
-    @Transactional
-    public void cancelOrder(int orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
-
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            throw new IllegalStateException("Order is already cancelled");
+            itemDto.setItemPrice(product.getPrice());
+            totalAmount += product.getPrice() * itemDto.getQuantity();
         }
 
-        order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        // Check user balance
+        if (user.getBalance() < totalAmount) {
+            throw new RuntimeException("Insufficient balance");
+        }
+
+        // Create order
+        Order order = new Order();
+        order.setUserId(createOrderDto.getUserId());
+
+
+        // Create order items
+        List<OrderItem> orderItems = new ArrayList<>();
+        for (OrderItemDto itemDto : createOrderDto.getOrderItems()) {
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(order);
+            orderItem.setProductId(itemDto.getProductId());
+            orderItem.setQuantity(itemDto.getQuantity());
+            orderItem.setItemPrice(itemDto.getItemPrice());
+            orderItems.add(orderItem);
+        }
+        order.setOrderItems(orderItems);
+
+        Order savedOrder = orderRepository.save(order);
+        return orderMapper.toDTO(savedOrder);
     }
 
+
+
+    public OrderDto getOrderById(Integer id) {
+        Order order = (Order) orderRepository.findByOrOrderId(id)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        return orderMapper.toDTO(order);
+    }
+
+    public List<OrderDto> getOrdersByUserId(Integer userId) {
+        return orderRepository.findByUserId(userId)
+                .stream()
+                .map(orderMapper::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    public List<OrderDto> getAllOrders() {
+        return orderRepository.findAll()
+                .stream()
+                .map(orderMapper::toDTO)
+                .collect(Collectors.toList());
+    }
 }

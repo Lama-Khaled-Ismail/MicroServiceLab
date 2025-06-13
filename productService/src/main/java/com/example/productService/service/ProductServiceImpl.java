@@ -1,91 +1,85 @@
 package com.example.productService.service;
 
-import com.example.productService.dtos.ProductDTO;
+import com.example.productService.dtos.CreateProductDto;
+import com.example.productService.dtos.ProductDto;
 import com.example.productService.entities.Product;
-import com.example.productService.repos.ProductRepo;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.*;
+import com.example.productService.mappers.ProductMapper;
+import com.example.productService.repos.ProductRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class ProductServiceImpl implements ProductService {
 
-    private final ProductRepo productRepo;
+    private final ProductRepository productRepository;
+
+    @Autowired
+    private ProductMapper productMapper;
 
 
 
 
-    public ProductServiceImpl(ProductRepo productRepo) {
-        this.productRepo = productRepo;
+    public ProductServiceImpl(ProductRepository productRepository) {
+        this.productRepository = productRepository;
 
     }
 
-    @Override
-    public Product createProduct(ProductDTO dto) {
-
-        Product product = toEntity(dto);
-        return productRepo.save(product);
+    public ProductDto createProduct(CreateProductDto createProductDto) {
+        Product product = productMapper.createDtoToEntity(createProductDto);
+        Product savedProduct = productRepository.save(product);
+        return productMapper.toDTO(savedProduct);
     }
 
-    @Override
-    public Product updateProduct(ProductDTO dto) {
-        Optional<Product> existing = productRepo.findById(dto.getProductId());
-        if (existing.isEmpty()) throw new IllegalArgumentException("Product not found");
-
-        Product updated = toEntity(dto);
-        return productRepo.save(updated);
+    public List<ProductDto> getAllProducts() {
+        return productRepository.findAll()
+                .stream()
+                .map(productMapper::toDTO)
+                .collect(Collectors.toList());
     }
 
-    @Override
-    public boolean deleteProductById(int id) {
-        if (!productRepo.existsById(id)) return false;
-        productRepo.deleteById(id);
-        return true;
+    public ProductDto getProductById(Integer id) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+        return productMapper.toDTO(product);
     }
 
-    @Override
-    public Product getProductById(int id) {
-        return productRepo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + id));
+    public ProductDto updateProduct(Integer id, CreateProductDto updateProductDto) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+
+        product.setName(updateProductDto.getName());
+        product.setPrice(updateProductDto.getPrice());
+        product.setStock(updateProductDto.getStock());
+
+
+        Product savedProduct = productRepository.save(product);
+        return productMapper.toDTO(savedProduct);
     }
 
-    @Override
-    public List<Product> getAllProducts() {
-        return productRepo.findAll();
+    public void deleteProduct(Integer id) {
+        if (!productRepository.existsById(id)) {
+            throw new RuntimeException("Product not found");
+        }
+        productRepository.deleteById(id);
     }
 
-    @Override
-    public boolean productExists(int productId) {
-        return productRepo.existsById(productId);
-    }
+    public ProductDto updateStock(Integer productId, Integer quantity) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
 
-    @Override
-    public Page<Product> filterProducts(String name, String category, Double minPrice, Double maxPrice, String sortDir, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("price").ascending());
-        if ("desc".equalsIgnoreCase(sortDir)) {
-            pageable = PageRequest.of(page, size, Sort.by("price").descending());
+        if (product.getStock() + quantity < 0) {
+            throw new RuntimeException("Insufficient stock");
         }
 
-        return productRepo.findFiltered(name, category, minPrice, maxPrice, pageable);
+        product.setStock(product.getStock() + quantity);
+        Product savedProduct = productRepository.save(product);
+        return productMapper.toDTO(savedProduct);
     }
 
-    // --- Helper methods ---
 
-    private Product toEntity(ProductDTO dto) {
-        Product p = new Product();
-        p.setProductId(dto.getProductId());
-        p.setName(dto.getName());
-        p.setDescription(dto.getDescription());
-        p.setPrice(dto.getPrice());
-        p.setCategoryId(dto.getCategoryId());
-        p.setImage(dto.getImage());
-        p.setStock(dto.getStock());
-        return p;
-    }
 
 
 }
